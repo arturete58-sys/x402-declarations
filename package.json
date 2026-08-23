@@ -1,15 +1,13 @@
 {
-  "name": "x402-translator",
-  "version": "1.0.0",
-  "main": "index.js",
-  "directories": {
-    "test": "test"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  "name": "x402-declarations",
+  "version": "0.1.0",
+  "description": "Normalise quality declarations from x402 providers into one schema",
+  "main": "src/index.js",
+  "files": ["src"],
+  "keywords": ["x402", "agentic-payments", "data-quality", "provenance", "ai-agents"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arturete58-sys/x402-declarations.git"
+  }
 }
