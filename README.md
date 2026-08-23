@@ -1,68 +1,133 @@
 # x402-declarations
 
-Normalise quality declarations from x402 providers into one schema.
+Call any x402 endpoint from its declared schema, and read what the provider says about the data it returns.
 
 ```
 npm install x402-declarations
 ```
 
----
+Two capabilities, one asymmetry:
 
-## The problem
+- **`buildRequest`** works across the whole catalogue, because x402 standardised the input contract.
+- **`normalize`** needs one adapter per provider, because x402 did not standardise anything about output quality.
 
-x402 providers that care about data quality declare it. They just don't agree on how.
-
-A survey of the full x402 catalogue (15,157 resources, 1,230 providers) found that **99.84% declare the shape of the response** — which fields, of which type — but **only 11.1% of providers declare anything about the quality of the data**: freshness, confidence, or provenance.
-
-Among the 136 that do, **all seven possible combinations of those three properties are represented.** There is no convention. There isn't even agreement on *where* to declare: some providers declare in the catalogue schema, the most rigorous ones declare only in the response body — which means an agent cannot read it before paying.
-
-The result is that consuming five providers means writing five parsers:
-
-| Concept | Kronos | Truth Bear | Otto AI | ApiToll | hugen |
-|---|---|---|---|---|---|
-| Data age | `cache_age_seconds` | `data_age_hours` | `meta.stalenessSec` | `asOf` (timestamp) | `quote_age_ms` |
-| Is it stale | `stale` | `freshness` | `degraded` | — | `quality_state` |
-| Confidence | `up_prob_calibrated` | `uncertainty` | `sourceHealth` | `confidence` | `fresh_sources` |
-| Source | `model` | `traceable_to` | — | `source.name` | — |
-| Verifiable | — | `record_hash` | — | — | — |
-
-Five vocabularies. Three different units for age (seconds, hours, milliseconds) plus one absolute timestamp. No shared semantics.
-
-In practice, no agent parses any of them.
+That asymmetry is the point of this library, and the reason it should eventually stop existing.
 
 ---
 
-## What this does
+## Part 1 — Calling: 6,664 endpoints nobody can invoke generically
 
-One function. Give it a URL and a response body, get back a normalised declaration.
+Of 15,182 active resources in the x402 catalogue, **6,664 are POST** and each expects a different body.
+
+The information needed to build that body is already published. 98.0% declare a body schema, 99.2% declare which fields are required, 87.7% constrain values with enums. It is structured, machine-readable, and sitting in the discovery catalogue.
+
+Nobody uses it. Integrating an endpoint means a human reading its schema and hand-writing a request.
+
+`buildRequest` reads the contract instead:
+
+```js
+const { buildRequest, applyRequest } = require('x402-declarations');
+
+const req = buildRequest(schema);
+// { method: 'POST', body: { offering: 'lumi_launch_digest', window: '24h' },
+//   ready: true, missing: [], filled: { window: 'schema' } }
+```
+
+Measured across all 6,664 POST resources in the catalogue:
+
+| | Resources | Share |
+|---|---:|---:|
+| Buildable with no caller input | 2,348 | 35.2% |
+| Buildable with one caller field | 3,350 | 50.3% |
+| **Invocable with zero or one field** | **5,698** | **85.5%** |
+| Unparseable schema | 0 | 0% |
+
+When a field genuinely cannot be inferred, it says which and why:
+
+```js
+{
+  ready: false,
+  missing: ['body.text (The text to analyze for sentiment)']
+}
+```
+
+That is not a failure. Nobody can guess which text you want analysed. What the caller could not know is that the field is named `text` and not `input`, `content` or `query`.
+
+Values are resolved in order: caller-supplied → `const` → `default` → `examples` → first `enum` value if required. Never invented.
+
+---
+
+## Part 2 — Reading: five vocabularies for the same three ideas
+
+Providers that care about data quality declare it. They just don't agree on how.
+
+Across the full catalogue, **99.84% of resources declare the shape of the response** — which fields, of which type. **Only 11.1% of providers declare anything about its quality**: freshness, confidence, or provenance. Among those that do, all seven possible combinations of the three are represented. There is no convention.
+
+| Concept | Kronos | Truth Bear | Otto AI | ApiToll | hugen | LUMI |
+|---|---|---|---|---|---|---|
+| Data age | `cache_age_seconds` | `data_age_hours` | `meta.stalenessSec` | `asOf` | `quote_age_ms` | `windowHours` |
+| Is it stale | `stale` | `freshness` | `degraded` | — | `quality_state` | — |
+| Confidence | `up_prob_calibrated` | `uncertainty` | `sourceHealth` | `confidence` | `fresh_sources` | `outcomeState` |
+| Source | `model` | `traceable_to` | — | `source.name` | — | `rubricVersion` |
+| Verifiable | — | `record_hash` | — | — | — | `resultHash` |
+
+Six vocabularies. Four different units for age: seconds, hours, milliseconds, and an absolute timestamp.
 
 ```js
 const { normalize, isUsable } = require('x402-declarations');
 
-const res  = await payAndFetch('https://tick.hugen.tokyo/tick/latest');
-const decl = normalize(res.url, res.body);
-
+const decl  = normalize(url, responseBody);
 const check = isUsable(decl, { maxAgeSeconds: 60 });
-if (!check.usable) {
-  console.warn('skipping:', check.reasons);
-}
+
+if (!check.usable) console.warn('skipping:', check.reasons);
 ```
 
-Real output from that endpoint:
+---
 
+## Two cases this catches
+
+**A stale FX feed, charged anyway.** `tick.hugen.tokyo/tick/latest` returned HTTP 200 after a successful payment, in a valid schema:
+
+```json
+{ "quality_state": "stale", "fresh_sources": 0, "stale_sources": 6,
+  "quote_age_ms": 1140535, "is_crossed": true,
+  "best_bid": "1.16766", "best_ask": "1.16764" }
 ```
-{
-  usable: false,
-  reasons: [
-    'provider declares data as stale',
-    'age 1140s exceeds caller limit 60s'
-  ]
-}
+
+Zero of six sources fresh, data 19 minutes old on a real-time feed, and a crossed book — bid above ask, arithmetically impossible in a live market. The provider declared all of it. Nothing in the payment, the status code or the response shape indicated a problem.
+
+```js
+{ usable: false,
+  reasons: ['provider declares data as stale',
+            'age 1140s exceeds caller limit 60s'] }
 ```
 
-That response arrived with HTTP 200, after a successful payment, in a valid schema. Nothing in the payment layer, the status code or the response shape indicated a problem. The provider had declared `quality_state: "stale"`, `fresh_sources: 0` of 6, and `is_crossed: true` — a bid above the ask, which is arithmetically impossible in a live market.
+**Interim results presented as final.** LUMI nulls out its headline metrics while a measurement window is still open, and puts provisional figures in a separate object with different field names so they cannot be mistaken for final ones:
 
-The provider was honest. The declaration was simply unreadable by anything that didn't already know its format.
+```json
+{ "outcomeState": "INTERIM_ONLY", "medianTerminalMultiple": null,
+  "interim": { "medianTerminalMultipleSoFar": 2.412 } }
+```
+
+```js
+isUsable(decl, { requireEstablished: true })
+// { usable: false,
+//   reasons: ['provider states the metric is not statistically established'] }
+```
+
+Both providers were honest. Their declarations were simply unreadable by anything that didn't already know the format.
+
+---
+
+## `established` is the field that matters
+
+Kronos ships this in its response body:
+
+> "Directional edge not statistically established for this asset (hit-rate not proven > 50%). Treat direction as low-confidence."
+
+An honest, careful warning. Also English prose. No agent reads it.
+
+The adapter turns it into `quality.established: false` — a boolean an agent can branch on. That transformation, from a caveat a human would read to a field a machine can evaluate, is what the library is for.
 
 ---
 
@@ -74,11 +139,11 @@ The provider was honest. The declaration was simply unreadable by anything that 
     ageSeconds:         408,      // always seconds, whatever the provider uses
     declaredMaxSeconds: 1200,     // extracted from the provider's own statement
     isStale:            false,
-    basis:              'cache'   // 'live' | 'cache' | 'snapshot' | 'multi-source'
+    basis:              'cache'   // live | cache | snapshot | multi-source | window
   },
   quality: {
     confidence:  0.4269,
-    established: false,           // does the provider claim statistical support
+    established: false,
     sampleSize:  5000,
     note:        'Directional edge not statistically established...'
   },
@@ -93,30 +158,32 @@ The provider was honest. The declaration was simply unreadable by anything that 
 }
 ```
 
-**Every field can be null.** Absence of a declaration is information, not an error — it means the provider said nothing, which is what 88.9% of them do.
+**Every field can be null.** Absence of a declaration is information, not an error — it is what 88.9% of providers do.
 
 `_raw` is always preserved. Normalising never loses data.
 
 ---
 
-## `established` is the field that matters
+## API
 
-Kronos ships this in its response body:
+**`buildRequest(schema, params?)`** → `{ method, body, queryParams, ready, missing, filled }`
 
-```json
-"direction_note": "Directional edge not statistically established for this
- asset (hit-rate not proven > 50%). Treat direction as low-confidence."
-```
+**`applyRequest(url, req)`** → `{ url, method, body }` ready to send.
 
-That is an honest, careful warning. It is also English prose. No agent reads it.
+**`normalize(url, body)`** → normalised declaration. Unknown URLs return an empty declaration with `_adapter: 'none'` and `_raw` intact. Nothing throws.
 
-The adapter turns it into:
+**`isUsable(decl, opts)`** → `{ usable, reasons }`
 
-```js
-quality: { established: false, sampleSize: 1000 }
-```
+| Option | Effect |
+|---|---|
+| `maxAgeSeconds` | Reject data older than the caller's limit |
+| `requireEstablished` | Reject when the provider states the metric is not statistically supported |
 
-A boolean an agent can branch on. That transformation — from a caveat a human would read to a field a machine can evaluate — is the whole point of the library.
+It also rejects when the provider declares the data stale, and when the age exceeds the provider's **own** declared maximum. That last check needs no configuration: it holds the provider to what it said itself.
+
+**`call({ url, schema, params, pay, require })`** → both halves in one step. `pay` is a function you supply — the library never handles payments or keys.
+
+**`coverage(decl)`** → which of the three properties are actually present.
 
 ---
 
@@ -129,34 +196,14 @@ A boolean an agent can branch on. That transformation — from a caveat a human 
 | `ottoai@1.0` | `ottoai.services` | freshness, source health |
 | `apitoll@1.0` | `apitoll.cloud` | freshness, confidence, upstream source |
 | `hugen@1.0` | `hugen.tokyo` | freshness, source count, quality state |
-
-Unknown URLs return an empty declaration with `_adapter: 'none'` and `_raw` intact. Nothing breaks.
-
----
-
-## API
-
-**`normalize(url, body)`** → normalised declaration.
-
-**`isUsable(decl, opts)`** → `{ usable, reasons }`.
-
-| Option | Effect |
-|---|---|
-| `maxAgeSeconds` | Reject if the data is older than the caller's limit |
-| `requireEstablished` | Reject if the provider states the metric is not statistically supported |
-
-It also rejects when the provider declares the data stale, or when the age exceeds the provider's **own** declared maximum. That last check needs no configuration: it holds the provider to what it said itself.
-
-**`coverage(decl)`** → which of the three properties are actually present.
+| `lumi@1.0` | `app.tenna.ai` | window, outcome state, rubric version |
 
 ---
 
 ## Adding an adapter
 
-An adapter is two functions:
-
 ```js
-const { empty } = require('x402-declarations/schema');
+const { empty } = require('x402-declarations/src/schema');
 
 const matches = (url) => /yourprovider\.com/.test(url || '');
 
@@ -179,17 +226,29 @@ Pull requests welcome. Adapters are the point.
 
 ## What this is not
 
-**It does not verify anything.** It reports what the provider declared, normalised. If a provider declares `stale: false` and serves stale data, this library will faithfully report `isStale: false`. Verification is a separate problem, measured separately at the [observatory](https://github.com/arturete58-sys/x402-observatory).
+**It does not verify anything.** It reports what the provider declared, normalised. If a provider declares `stale: false` and serves stale data, this library faithfully reports `isStale: false`. Verification is a separate problem, measured separately at the [observatory](https://github.com/arturete58-sys/x402-observatory).
 
 **It does not rank providers.** No scores, no leaderboards, no judgements.
 
-**It is a workaround.** The right fix is a field in the x402 specification so that declarations are uniform at the source. This library exists because that field does not exist yet, and it is designed to become unnecessary if it ever does.
+**It does not handle payments.** `call` takes a payment function; keys never touch this library.
+
+**It is a workaround.** The right fix is a field in the x402 specification so declarations are uniform at source. Part 1 needs no adapters because the input contract is standardised. Part 2 needs six because the output is not. This library exists because of that gap and is designed to become unnecessary if it closes.
+
+---
+
+## Tests
+
+```
+npm test
+```
+
+Ten assertions covering unit conversion, threshold extraction from prose, stale detection, unknown-URL safety and enum resolution.
 
 ---
 
 ## Related
 
-- [x402-observatory](https://github.com/arturete58-sys/x402-observatory) — the measurements behind the numbers in this README, with raw data and methodology.
+- [x402-observatory](https://github.com/arturete58-sys/x402-observatory) — the measurements behind every figure in this README, with raw data and methodology.
 
 ## Licence
 
