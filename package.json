@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Normalise quality declarations from x402 providers into one schema",
   "main": "src/index.js",
+  "scripts": { "test": "node test/smoke.js" },
   "files": ["src"],
   "keywords": ["x402", "agentic-payments", "data-quality", "provenance", "ai-agents"],
   "license": "MIT",
