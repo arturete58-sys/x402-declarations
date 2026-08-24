@@ -1,24 +1,34 @@
-function adaptNetIntel(rawOutput) {
-  if (!rawOutput || typeof rawOutput !== 'object') return null;
+const { empty } = require('../schema');
+const matches = (url) => /netintel\.dev/.test(url || '');
 
-  const example = rawOutput.example || rawOutput;
-  let confidence = null;
+function parse(body) {
+  const d = empty();
+  d._adapter = 'netintel@1.0';
+  d._raw = body;
+  if (!body) return d;
 
-  if (typeof example.score === 'number') {
-    confidence = Number(((example.score + 1) / 2).toFixed(4));
-  } else if (typeof example.grade === 'string') {
-    const gradeMap = { A: 1.0, B: 0.8, C: 0.6, D: 0.4, F: 0.0 };
-    confidence = gradeMap[example.grade.toUpperCase()] ?? null;
+  // grade A-F derivado de service_score: A/B implica soporte, D/F no
+  if (body.grade) {
+    d.quality.note = 'grade: ' + body.grade;
+    d.quality.established = ['A','B','C'].includes(String(body.grade).toUpperCase());
+  }
+  if (body.service_score !== undefined) d.quality.confidence = Number(body.service_score);
+  else if (body.score !== undefined) d.quality.confidence = Math.abs(Number(body.score));
+
+  if (Array.isArray(body.findings) && body.findings.length) {
+    d.quality.note = (d.quality.note ? d.quality.note + '; ' : '') +
+      body.findings.length + ' findings reported';
+  }
+  if (body.polarity) {
+    d.quality.note = (d.quality.note ? d.quality.note + '; ' : '') + 'polarity: ' + body.polarity;
   }
 
-  return {
-    provider: 'NetIntel',
-    stalenessSec: null,
-    confidence: confidence,
-    recordHash: null,
-    provenance: 'first-party-sentiment-engine',
-    rawFields: Object.keys(example)
-  };
+  if (body.generated_at || body.asOf) {
+    const t = new Date(body.generated_at || body.asOf).getTime();
+    if (isFinite(t)) d.freshness.ageSeconds = Math.round((Date.now() - t) / 1000);
+  }
+  d.provenance.source = body.model || body.source || null;
+  d.provenance.verifiable = false;
+  return d;
 }
-
-module.exports = { adaptNetIntel };
+module.exports = { matches, parse };

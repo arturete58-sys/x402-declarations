@@ -6,6 +6,7 @@ const adapters = [
   require('./adapters/apitoll'),
   require('./adapters/hugen'),
   require('./adapters/lumi'),
+  require('./adapters/netintel'),
 ];
 function normalize(url, body) {
   const a = adapters.find(x => x.matches(url));
