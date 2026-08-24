@@ -7,7 +7,7 @@ const check = (nombre, cond) => {
 
 check('exporta las funciones', ['normalize','buildRequest','isUsable','call']
   .every(k => typeof t[k] === 'function'));
-check('siete adaptadores', t.supported().length === 7);
+check('ocho adaptadores', t.supported().length === 8);
 
 const k = t.normalize('https://kronossignals.com/x',
   { cache_age_seconds: 120, cached: true, up_prob_calibrated: 0.42,
