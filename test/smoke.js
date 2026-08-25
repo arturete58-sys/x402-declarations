@@ -21,7 +21,7 @@ const h = t.normalize('https://tick.hugen.tokyo/x',
   { quality_state: 'stale', fresh_sources: 0, stale_sources: 6, quote_age_ms: 1140535 });
 check('hugen: ms convertidos a s', h.freshness.ageSeconds === 1141);
 check('hugen: detecta stale', h.freshness.isStale === true);
-check('hugen: no usable', t.isUsable(h, { maxAgeSeconds: 60 }).usable === false);
+check('hugen: no usable', t.isUsable(h, { maxAgeSeconds: 60 }).usable === false && t.isUsable(h, { maxAgeSeconds: 60 }).providerAtFault === true);
 
 const desconocido = t.normalize('https://nadie.example/x', { a: 1 });
 check('url desconocida no rompe', desconocido._adapter === 'none' && desconocido._raw.a === 1);
