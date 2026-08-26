@@ -9,7 +9,10 @@ function parse(body) {
 
   // Declara en milisegundos, no en segundos
   if (body.quote_age_ms !== undefined) d.freshness.ageSeconds = Math.round(Number(body.quote_age_ms) / 1000);
-  if (body.quality_state) d.freshness.isStale = (body.quality_state !== 'ok');
+  if (body.quality_state) {
+    const sano = ['ok', 'good', 'healthy', 'fresh'];
+    d.freshness.isStale = !sano.includes(String(body.quality_state).toLowerCase());
+  }
   d.freshness.basis = 'multi-source';
 
   const fresh = Number(body.fresh_sources ?? 0);
