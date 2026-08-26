@@ -6,3 +6,6 @@ const { call } = require('./client');
 
 module.exports = { normalize, coverage, supported, empty,
                    buildRequest, applyRequest, isUsable, call };
+
+const { extractResult } = require('./result');
+module.exports.extractResult = extractResult;
