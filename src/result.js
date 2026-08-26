@@ -12,6 +12,8 @@ const CAMINOS = [
   ['result', 'items'], ['result', 'result'], ['result', 'output'], ['result', 'value'],
   ['data', 'items'],   ['data', 'result'],   ['data', 'output'],
   ['output', 'items'],
+  ['result', 'hex'], ['result', 'hash'], ['result', 'text'],
+  ['hex'], ['hash'],
   ['items'], ['result'], ['output'], ['value'], ['data'],
 ];
 
