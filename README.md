@@ -258,3 +258,32 @@ Ten assertions covering unit conversion, threshold extraction from prose, stale 
 ## Licence
 
 MIT.
+
+---
+
+## Part 3 — Reading results: every provider wraps differently
+
+The same problem, one layer down. A provider returns the actual result of
+your call wrapped in its own envelope, and no two agree on the shape:
+
+```
+{ "items": [...] }                                        // at the root
+{ "result": { "schema": "...", "items": [...] } }         // nested twice
+{ "data": { "result": [...] } }                           // different wrapper
+```
+
+```js
+const { extractResult } = require('x402-declarations');
+
+const { value, path, wrapped } = extractResult(url, body, { expect: 'array' });
+// value: [1, 2, 3]
+// path:  ['result', 'items']
+```
+
+`expect` accepts `array`, `object`, `scalar` or `any`. When no known envelope
+matches and a single non-metadata array is present, it is returned. When
+nothing is recognisable the body is returned unchanged with `wrapped: false` —
+the function never guesses silently.
+
+`path` tells you where it found the value, so a caller can audit the choice
+rather than trust it.
