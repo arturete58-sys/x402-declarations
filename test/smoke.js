@@ -31,5 +31,10 @@ const req = t.buildRequest({ properties: { input: { properties: {
   body: { required: ['w'], properties: { w: { enum: ['24h','7d'] } } } } } } });
 check('buildRequest usa enum', req.ready === true && req.body.w === '24h');
 
+const ex1 = t.extractResult('', { tool_name:'x', result:{ schema:'s', items:[1,2,3], count:3 } }, { expect:'array' });
+check('extractResult desenvuelve result.items', JSON.stringify(ex1.value) === '[1,2,3]');
+const ex2 = t.extractResult('', { a:1 }, { expect:'array' });
+check('extractResult devuelve el cuerpo si no hay envoltorio', ex2.wrapped === false);
+
 console.log(fallos ? '\n' + fallos + ' fallos' : '\ntodo correcto');
 process.exit(fallos ? 1 : 0);
