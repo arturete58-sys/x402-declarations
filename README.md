@@ -172,7 +172,12 @@ The adapter turns it into `quality.established: false` — a boolean an agent ca
 
 **`normalize(url, body)`** → normalised declaration. Unknown URLs return an empty declaration with `_adapter: 'none'` and `_raw` intact. Nothing throws.
 
-**`isUsable(decl, opts)`** → `{ usable, reasons }`
+**`isUsable(decl, opts)`** → `{ usable, reasons, providerAtFault, codes }`
+
+Reasons are structured, not prose. Each carries a `code` and an `attributable`
+field (`provider` or `caller`). `providerAtFault` is true only when the provider
+broke something it declared itself — as distinct from a rejection that reflects
+the caller's own stricter policy. A settlement layer branches on that.
 
 | Option | Effect |
 |---|---|
