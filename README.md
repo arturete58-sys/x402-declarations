@@ -287,3 +287,36 @@ the function never guesses silently.
 
 `path` tells you where it found the value, so a caller can audit the choice
 rather than trust it.
+
+---
+
+## Unknown providers: pattern detection
+
+With no adapter for a provider, `normalize` falls back to detecting quality
+fields by name pattern and unit suffix rather than returning nothing.
+
+```js
+normalize('https://never-seen.example/x', { meta: { elapsed_ms: 250, health: 'ok' } })
+// {
+//   freshness: { ageSeconds: 0.25, isStale: false, ... },
+//   _adapter: 'heuristic',
+//   _detected: { ageSeconds: { field: 'meta.elapsed_ms', unit: 'ms' }, ... }
+// }
+```
+
+`_detected` records which field each value came from, so the inference can be
+audited rather than trusted.
+
+**Detection is never presented as declaration.** `isUsable` returns a `basis`
+field:
+
+| basis | meaning |
+|---|---|
+| `declared` | an exact adapter read fields the provider documents |
+| `heuristic` | fields were inferred from names and units |
+| `none` | nothing recognisable was found |
+
+Anything acting on a verdict — a settlement layer, a contract — should treat
+`heuristic` as a signal to verify, not as ground truth. The unit is only
+inferred when the field name carries a recognisable suffix (`_ms`, `_hours`,
+`_seconds`); without one, the function returns nothing rather than guessing.
