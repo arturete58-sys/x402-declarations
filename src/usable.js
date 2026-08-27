@@ -36,12 +36,22 @@ function isUsable(d, opts = {}) {
 
   const attributable = reasons.filter(r => r.attributable === 'provider');
 
+  // Un veredicto derivado de deteccion por patron no tiene la misma solidez
+  // que uno derivado de una declaracion exacta del proveedor. Quien actue
+  // sobre esto (una capa de liquidacion, un contrato) debe poder distinguirlo.
+  const basis = d._adapter === 'heuristic' ? 'heuristic'
+              : d._adapter === 'none'      ? 'none'
+              : 'declared';
+
   return {
     usable: reasons.length === 0,
     reasons,
     /** Verdadero solo si el proveedor incumplio algo que el mismo declaro.
      *  Es la señal que una capa de liquidacion puede usar para abonar o pausar. */
     providerAtFault: attributable.length > 0,
+    /** 'declared' | 'heuristic' | 'none'. Nunca actuar sobre 'heuristic'
+     *  sin verificacion adicional. */
+    basis,
     codes: reasons.map(r => r.code),
   };
 }

@@ -36,5 +36,11 @@ check('extractResult desenvuelve result.items', JSON.stringify(ex1.value) === '[
 const ex2 = t.extractResult('', { a:1 }, { expect:'array' });
 check('extractResult devuelve el cuerpo si no hay envoltorio', ex2.wrapped === false);
 
+const heu = t.normalize('https://nunca-visto.example/x', { meta: { elapsed_ms: 500, health: 'ok' } });
+check('heuristica detecta proveedor desconocido', heu._adapter === 'heuristic');
+check('heuristica marca la base', t.isUsable(heu).basis === 'heuristic');
+const dec = t.normalize('https://tick.hugen.tokyo/x', { quality_state: 'good', quote_age_ms: 100 });
+check('adaptador exacto marca declared', t.isUsable(dec).basis === 'declared');
+
 console.log(fallos ? '\n' + fallos + ' fallos' : '\ntodo correcto');
 process.exit(fallos ? 1 : 0);
