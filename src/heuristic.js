@@ -76,4 +76,29 @@ function detectarConfianza(body) {
   return null;
 }
 
-module.exports = { detectarFrescura, detectarEstado, detectarConfianza, recorrer };
+/** Procedencia: de donde dice el proveedor que saca el dato. */
+function detectarProcedencia(body) {
+  const campos = recorrer(body);
+  const patron = /^(source|origin|exchange|provider|upstream|traceable_to|feed|venue)$/i;
+  for (const c of campos) {
+    if (patron.test(c.clave) && typeof c.valor === 'string' && c.valor.length < 80) {
+      return { source: c.valor, field: c.ruta.join('.') };
+    }
+  }
+  return null;
+}
+
+/** Hash recomputable del registro, si lo publica. */
+function detectarHash(body) {
+  const campos = recorrer(body);
+  for (const c of campos) {
+    if (!/hash|digest|checksum|^hex$|fingerprint/i.test(c.clave)) continue;
+    if (typeof c.valor === 'string' && /^(sha256:)?[a-f0-9]{32,128}$/i.test(c.valor)) {
+      return { hash: c.valor, field: c.ruta.join('.') };
+    }
+  }
+  return null;
+}
+
+module.exports = { detectarFrescura, detectarEstado, detectarConfianza,
+                   detectarProcedencia, detectarHash, recorrer };
