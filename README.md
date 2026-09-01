@@ -1,5 +1,7 @@
 # x402-declarations
 
+[![npm](https://img.shields.io/npm/v/x402-declarations)](https://www.npmjs.com/package/x402-declarations)
+
 Call any x402 endpoint from its declared schema, and read what the provider says about the data it returns.
 
 ```
