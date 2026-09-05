@@ -1,0 +1,124 @@
+{
+  "version": "0.1",
+  "note": "Conformance cases for x402 delivery declarations. Each case gives an input body and the properties an implementation must derive from it. An implementation passes a case when every field in `expect` matches. Fields not listed are not constrained.",
+  "cases": [
+    {
+      "id": "freshness-seconds",
+      "why": "Provider declares age in seconds. Must be read as seconds.",
+      "url": "https://example.test/kronos",
+      "body": {
+        "cache_age_seconds": 120,
+        "cached": true
+      },
+      "expect": {
+        "freshness.ageSeconds": 120
+      }
+    },
+    {
+      "id": "freshness-milliseconds",
+      "why": "Provider declares age in milliseconds. Must be converted to seconds and rounded to the nearest second, on every path: an adapter and a heuristic reading the same field must not disagree.",
+      "url": "https://example.test/hugen",
+      "body": {
+        "quote_age_ms": 1140535
+      },
+      "expect": {
+        "freshness.ageSeconds": 1141
+      }
+    },
+    {
+      "id": "declared-stale",
+      "why": "Provider states its own data is stale. Must be surfaced.",
+      "url": "https://example.test/hugen",
+      "body": {
+        "quality_state": "stale",
+        "fresh_sources": 0,
+        "stale_sources": 6,
+        "quote_age_ms": 1140535
+      },
+      "expect": {
+        "freshness.isStale": true
+      }
+    },
+    {
+      "id": "fault-is-providers",
+      "why": "Provider broke what it declared: not usable, and the provider is at fault.",
+      "url": "https://example.test/hugen",
+      "body": {
+        "quality_state": "stale",
+        "quote_age_ms": 1140535
+      },
+      "options": {
+        "maxAgeSeconds": 60
+      },
+      "expect": {
+        "usable": false,
+        "providerAtFault": true
+      }
+    },
+    {
+      "id": "fault-is-callers",
+      "why": "Provider delivered what it declared; the caller's policy was stricter. Not the provider's fault, and the charge stands.",
+      "url": "https://example.test/kronos",
+      "body": {
+        "cache_age_seconds": 120
+      },
+      "options": {
+        "maxAgeSeconds": 60
+      },
+      "expect": {
+        "usable": false,
+        "providerAtFault": false
+      }
+    },
+    {
+      "id": "no-declaration",
+      "why": "Nothing recognisable. Absence of a declaration is information, not an error. Must not invent values.",
+      "url": "https://nobody.test/x",
+      "body": {
+        "a": 1
+      },
+      "expect": {
+        "basis": "none",
+        "freshness.ageSeconds": null
+      }
+    },
+    {
+      "id": "heuristic-not-declared",
+      "why": "A field inferred from its name is never reported as a declaration, and is rounded to the nearest second like any other path.",
+      "url": "https://never-seen.test/x",
+      "body": {
+        "meta": {
+          "elapsed_ms": 500
+        }
+      },
+      "expect": {
+        "basis": "heuristic",
+        "freshness.ageSeconds": 1
+      }
+    },
+    {
+      "id": "no-unit-no-guess",
+      "why": "A numeric field with no recognisable unit suffix must not be interpreted.",
+      "url": "https://never-seen.test/y",
+      "body": {
+        "meta": {
+          "elapsed": 500
+        }
+      },
+      "expect": {
+        "freshness.ageSeconds": null
+      }
+    },
+    {
+      "id": "raw-preserved",
+      "why": "Normalisation is never lossy. The original body must survive.",
+      "url": "https://nobody.test/x",
+      "body": {
+        "a": 1
+      },
+      "expect": {
+        "_raw.a": 1
+      }
+    }
+  ]
+}
